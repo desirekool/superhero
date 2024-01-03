@@ -1,7 +1,19 @@
 import { createSlice } from '@reduxjs/toolkit';
 
-const initialState = {
-  user: null,
+export const defaultUser = {
+  id: '',
+  username: '',
+  email: '',
+  isOnline: false,
+  img: '',
+  creationTime: '',
+  lastSeen: '',
+  bio: '',
+};
+
+export const initialState = {
+  // user: [],
+  currentUser: defaultUser,
   users: null
 };
 
@@ -10,7 +22,9 @@ const userSlice = createSlice({
   initialState,
   reducers: {
     setUser: (state, action) => {
-      state.user = action.payload;
+      const user = action.payload;
+      localStorage.setItem('superhero_user', JSON.stringify(user));
+      state.currentUser = user;      
     },
     setUsers: (state, action) => {
       state.users = action.payload;

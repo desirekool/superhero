@@ -1,22 +1,47 @@
 import { useState } from "react";
 import Button from "./Button";
-import Input from "./Input"
+import Input from "./Input";
+import { auth } from "../Backend/Firebase";
+import { BE_signUp, BE_signIn } from "../Backend/Queries";
+import { useNavigate } from "react-router-dom";
+import { AppDispatch } from "../Redux/store";
+import { useDispatch } from "react-redux";
+import { authDataType } from "../Backend/Types";
 
 const Login = () => {
   const [login, setLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [signUpLoading, setSignUpLoading] = useState(false);
+  const [signInLoading, setSignInLoading] = useState(false);
 
-  const handleSignin = () => {
-    const data = {email, password, confirmPassword};
-    console.log(data);
-  }
+  const goTo = useNavigate();
+  const dispatch = useDispatch<AppDispatch>();
 
   const handleSignup = () => {
-    const data = {email, password, confirmPassword};
-    console.log(data);
-  }
+    const data = { email, password, confirmPassword };
+    auth(data, BE_signUp, setSignUpLoading);
+  };
+  const handleSignin = () => {
+    const data = { email, password };
+    auth(data, BE_signIn, setSignInLoading);
+  };
+
+  const auth = (
+    data: authDataType,
+    func: any,
+    setLoading: React.Dispatch<React.SetStateAction<boolean>>
+  ) => {
+    func(data, setLoading, reset, goTo, dispatch);
+  };
+
+  const reset = () => {
+    setEmail("");
+    setPassword("");
+    setConfirmPassword("");
+  };
+
 
     return (   
     <div className="width-full md:w-[450px]">
@@ -28,12 +53,20 @@ const Login = () => {
           {login ? <a href="#" className="text-myBlue text-right">Forgot Password?</a> : null}
           {login ? (
             <>
-              <Button text="Login" onClick={handleSignin}/>
+              <Button 
+                text="Login" 
+                onClick={handleSignin}
+                loading={signInLoading}
+              />
               <Button text="Register" secondary onClick={() => setLogin(false)}/>
             </>
           ) : (
             <>
-              <Button text="Register" onClick={handleSignup}/>
+              <Button 
+                text="Register" 
+                onClick={handleSignup}
+                loading={signUpLoading}
+              />
               <Button text="Login" secondary onClick={() => setLogin(true)}/>
             </>
           )}          

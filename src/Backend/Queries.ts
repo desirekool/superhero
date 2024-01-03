@@ -1,24 +1,194 @@
-export const BE_signUp = (email, password) => {
-    return auth.createUserWithEmailAndPassword(email, password);
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
+import { auth, db } from "./Firebase";
+import { authDataType, setLoadingType, userType } from "../Types";
+import { NavigateFunction } from "react-router-dom";
+import { LoremIpsum } from "lorem-ipsum";
+import {
+  addDoc,
+  and,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  or,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+} from "@firebase/firestore";
+
+import { AppDispatch } from "../Redux/store";
+import {
+  defaultUser,  
+  setUser,  
+} from "../Redux/userSlice";
+import { toastError } from "../utils/toast";
+import CatchErr from "../utils/catchErr";
+import ConvertTime from "../utils/ConvertTime";
+import AvatarGenerator from "../utils/AvatarGenerator";
+
+// collection names
+const usersColl = "users";
+const tasksColl = "tasks";
+const taskListColl = "taskList";
+const chatsColl = "chats";
+const messagesColl = "messages";
+
+const lorem = new LoremIpsum({
+  sentencesPerParagraph: {
+    max: 8,
+    min: 4
+  },
+  wordsPerSentence: {
+    max: 16,
+    min: 4
+  }
+});
+
+export const BE_signUp = (
+  data: authDataType, 
+  setLoading: setLoadingType,
+  reset: () => void, 
+  goTo: NavigateFunction,
+  dispatch: AppDispatch
+  ) => {
+  const { email, password, confirmPassword } = data;
+    setLoading(true);
+    if(email && password ) {
+      if(password === confirmPassword) {
+        createUserWithEmailAndPassword(auth, email, password)
+        .then(async ({user}) => {
+          const imgLink = AvatarGenerator(user.email?.split("@")[0]);
+          const userInfo =await  addUserToCollection(user.uid, user.email || "", user.email?.split('@')[0] || "", imgLink);
+          dispatch(setUser(userInfo));
+          setLoading(false);
+          reset();
+          goTo('/dashboard');
+        })
+        .catch(error => {
+          CatchErr(error.code);          
+          setLoading(false);
+        });        
+      } else {
+        toastError('Passwords must match');
+      }      
+    } else {
+      
+      toastError("Fields shouldn't be left empty");
+    }
+
+}; // end of BE_signUp  function
+
+export const BE_signIn = (data: authDataType, setLoading: setLoadingType, reset: () => void, goTo: NavigateFunction, dispatch: AppDispatch) => {
+  const { email, password } = data;
+  setLoading(true);
+  if(email && password) {
+    signInWithEmailAndPassword(auth, email, password)
+    .then(async ({user}) => {
+      // Signed in 
+      // todo: set user online to true
+      await updateUserInfo({id: user.uid, isOnline: true});      
+      const userInfo = await getUserInfo(user.uid);
+      dispatch(setUser(userInfo));
+
+      // console.log(user);
+      setLoading(false);
+      reset();
+      goTo('/dashboard');
+    })
+    .catch(error => {
+      // console.log(error);
+      CatchErr(error.code);
+      setLoading(false);
+    });
+  } else {
+    toastError("Fields shouldn't be left empty");
+  }
+}; // end of BE_signIn function
+
+const addUserToCollection = async (id:string, email:string, username:string, img:string) => {
+  await setDoc(doc(db, usersColl, id), {
+    isOnline: true,
+    img,
+    username,
+    email,
+    creationTime: serverTimestamp(),
+    lastSeen: serverTimestamp(),
+    bio: lorem.generateParagraphs(1),
+  });
+
+  // return user info; 
+  return getUserInfo(id);
 };
-export const BE_signIn = (email, password) => {
-    return auth.signInWithEmailAndPassword(email, password);
+
+const getUserInfo = async (id:string): Promise< userType> => {
+  
+  const userRef = doc(db, usersColl, id);
+  const userSnap = await getDoc(userRef);
+  if(userSnap.exists()) {
+    const {img, isOnline, username, email, creationTime, lastSeen, bio} = userSnap.data();
+    return {
+      id: userSnap.id,
+      username,
+      email,
+      isOnline,
+      img,
+      creationTime: creationTime ? ConvertTime(creationTime.toDate().toString()) : 'no date yet: userinfo',
+      lastSeen: lastSeen ? ConvertTime(lastSeen.toDate().toString()) : 'no date yet: userinfo',
+      bio,
+    };
+  } else {
+    toastError('getUserInfo: User not found');
+    return defaultUser;
+  }
 };
-export const BE_signOut = () => {
-    return auth.signOut();
+
+// update user info
+const updateUserInfo = async ({
+  id,
+  username,
+  img,
+  isOnline,
+  isOffline,
+}: {
+  id?: string;
+  username?: string;
+  img?: string;
+  isOnline?: boolean;
+  isOffline?: boolean;
+}) => {
+  if (!id) {
+    id = getStorageUser().id;
+  }
+
+  if (id) {
+    await updateDoc(doc(db, usersColl, id), {
+      ...(username && { username }),
+      ...(isOnline && { isOnline }),
+      ...(isOffline && { isOnline: false }),
+      ...(img && { img }), // img:"someimage"
+      lastSeen: serverTimestamp(),
+    });
+  }
 };
-export const BE_getUser = () => {
-    return auth.currentUser;
+
+const getStorageUser = (): userType => {
+  const user = localStorage.getItem("superhero_user");
+  if (user) {
+    return JSON.parse(user);
+  } else {
+    return defaultUser;
+  }
 };
-export const BE_getUsers = () => {
-    return db.collection('users').get();
-};
-export const BE_getUserById = (id) => {
-    return db.collection('users').doc(id).get();
-};
-export const BE_getUserByEmail = (email) => {
-    return db.collection('users').where('email', '==', email).get();
-};
-export const BE_addUser = (user) => {
-    return db.collection('users').add(user);
+
+export const BE_signOut = async (id:string, dispatch: AppDispatch) => { 
+  await updateDoc(doc(db, usersColl, id), {
+    isOnline: false,
+    lastSeen: serverTimestamp(),
+  });
+  dispatch(setUser(defaultUser));
 };
