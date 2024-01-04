@@ -1,4 +1,4 @@
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth, db } from "./Firebase";
 import { authDataType, setLoadingType, userType } from "../Types";
 import { NavigateFunction } from "react-router-dom";
@@ -24,7 +24,8 @@ import {
 import { AppDispatch } from "../Redux/store";
 import {
   defaultUser,  
-  setUser,  
+  setUser,
+  userStorageName,  
 } from "../Redux/userSlice";
 import { toastError } from "../utils/toast";
 import CatchErr from "../utils/catchErr";
@@ -74,11 +75,11 @@ export const BE_signUp = (
           setLoading(false);
         });        
       } else {
-        toastError('Passwords must match');
+        toastError('Passwords must match', setLoading);
       }      
     } else {
       
-      toastError("Fields shouldn't be left empty");
+      toastError("Fields shouldn't be left empty", setLoading);
     }
 
 }; // end of BE_signUp  function
@@ -176,8 +177,8 @@ const updateUserInfo = async ({
   }
 };
 
-const getStorageUser = (): userType => {
-  const user = localStorage.getItem("superhero_user");
+export const getStorageUser = (): userType => {
+  const user = localStorage.getItem(userStorageName);
   if (user) {
     return JSON.parse(user);
   } else {
@@ -185,10 +186,20 @@ const getStorageUser = (): userType => {
   }
 };
 
-export const BE_signOut = async (id:string, dispatch: AppDispatch) => { 
-  await updateDoc(doc(db, usersColl, id), {
-    isOnline: false,
-    lastSeen: serverTimestamp(),
-  });
-  dispatch(setUser(defaultUser));
+export const BE_signOut = (
+  dispatch: AppDispatch,
+  goTo: NavigateFunction,
+  setLoading: setLoadingType,
+  deleteAcc?: boolean
+) => {
+  setLoading(true);  
+  signOut(auth)
+    .then(async () => {
+      if (!deleteAcc) await updateUserInfo({ isOffline: true });
+      dispatch(setUser(defaultUser));
+      localStorage.removeItem(userStorageName);
+      goTo("/auth");
+      setLoading(false);
+    })
+    .catch((err) => CatchErr(err));
 };

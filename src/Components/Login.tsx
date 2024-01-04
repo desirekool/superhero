@@ -6,7 +6,7 @@ import { BE_signUp, BE_signIn } from "../Backend/Queries";
 import { useNavigate } from "react-router-dom";
 import { AppDispatch } from "../Redux/store";
 import { useDispatch } from "react-redux";
-import { authDataType } from "../Backend/Types";
+import { authDataType } from "../Types";
 
 const Login = () => {
   const [login, setLogin] = useState(true);

@@ -1,5 +1,7 @@
 import { createSlice } from '@reduxjs/toolkit';
 
+export const userStorageName = 'superhero_user';
+
 export const defaultUser = {
   id: '',
   username: '',
@@ -23,7 +25,7 @@ const userSlice = createSlice({
   reducers: {
     setUser: (state, action) => {
       const user = action.payload;
-      localStorage.setItem('superhero_user', JSON.stringify(user));
+      localStorage.setItem(userStorageName, JSON.stringify(user));
       state.currentUser = user;      
     },
     setUsers: (state, action) => {
