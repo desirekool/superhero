@@ -10,7 +10,7 @@ type IconProps = {
     onClick?:()=>void;
 };
   
-const Icon = ({ IconName, size = 20, className, loading, onClick, ping, reduceOpacityOnHover }: IconProps) => {
+const Icon = ({ IconName, size = 20, className, loading, onClick, ping, reduceOpacityOnHover = true }: IconProps) => {
     return (
         <button onClick={onClick} disabled={loading} 
           className={`

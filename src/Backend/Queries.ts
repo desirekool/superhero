@@ -1,8 +1,6 @@
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth, db } from "./Firebase";
-import { authDataType, setLoadingType, userType } from "../Types";
-import { NavigateFunction } from "react-router-dom";
-import { LoremIpsum } from "lorem-ipsum";
+import { authDataType, setLoadingType, taskListType, taskType, userType } from "../Types";
 import {
   addDoc,
   and,
@@ -21,16 +19,15 @@ import {
   where,
 } from "@firebase/firestore";
 
+import { NavigateFunction } from "react-router-dom";
 import { AppDispatch } from "../Redux/store";
-import {
-  defaultUser,  
-  setUser,
-  userStorageName,  
-} from "../Redux/userSlice";
+import { addTaskList, defaultTask, defaultTaskList, setTaskList, saveTaskListTitle, deleteTaskList, deleteTask, addTask } from "../Redux/taskListSlice";
+import { defaultUser, setUser, userStorageName } from "../Redux/userSlice";
 import { toastError } from "../utils/toast";
 import CatchErr from "../utils/catchErr";
 import ConvertTime from "../utils/ConvertTime";
 import AvatarGenerator from "../utils/AvatarGenerator";
+import { LoremIpsum } from "lorem-ipsum";
 
 // collection names
 const usersColl = "users";
@@ -119,7 +116,7 @@ const addUserToCollection = async (id:string, email:string, username:string, img
     email,
     creationTime: serverTimestamp(),
     lastSeen: serverTimestamp(),
-    bio: lorem.generateParagraphs(1),
+    bio: `Hi! my name is ${username}, I'm confortable working with React and Typescript. I can also build beautiful user interfaces`,
   });
 
   // return user info; 
@@ -203,3 +200,117 @@ export const BE_signOut = (
     })
     .catch((err) => CatchErr(err));
 };
+
+// TaskList Querries
+export const BE_addTaskList = async (dispatch:AppDispatch, setLoading: setLoadingType) => {
+  setLoading(true);
+  const { title } = defaultTaskList;
+  const taskListRef = collection(db, taskListColl);
+  const list = await addDoc(taskListRef, {
+    title,    
+    userId: getStorageUser().id,    
+  });
+  const newDocSnap = await getDoc(doc(db, list.path));
+  if(newDocSnap.exists()) {
+    const newlyAddedDoc: taskListType = {
+      id: newDocSnap.id,
+      title: newDocSnap.data().title,
+    };
+  
+    dispatch(addTaskList(newlyAddedDoc));
+    setLoading(false);
+  } else {
+    toastError('BE_addTaskList: doc not found', setLoading);
+  }
+
+  setLoading(false);
+  console.log(list.path);
+};
+
+export const BE_getTaskLists = async (dispatch:AppDispatch, setLoading: setLoadingType) => {
+  setLoading(true);
+  const tasksList = await getAllTasksList();
+  dispatch(setTaskList(tasksList));
+  setLoading(false);
+};
+
+const getAllTasksList = async () => {
+  const taskListRef = collection(db, taskListColl);
+  const q = query(taskListRef, where("userId", "==", getStorageUser().id));
+  const querySnapshot = await getDocs(q);
+  const taskLists:taskListType[] = [];
+  querySnapshot.forEach((doc) => {
+    taskLists.push({
+      id: doc.id,
+      title: doc.data().title,
+      editMode: false,
+      tasks: [],
+    });
+  });
+  return taskLists;
+};
+
+export const BE_saveTaskList = async (dispatch: AppDispatch, setLoading: setLoadingType, listId: string, title: string) => {
+  setLoading(true);
+  const taskListRef = doc(db, taskListColl, listId);
+  await updateDoc(taskListRef, {
+    title,
+  });
+  const updatedTaskList = await getDoc(taskListRef);
+  setLoading(false);
+  dispatch(saveTaskListTitle({id: updatedTaskList.id, ...updatedTaskList.data()}));
+};
+
+export const BE_deleteTaskList = async (dispatch: AppDispatch, listId: string, tasks: taskType[], setLoading?: setLoadingType) => {
+  if(setLoading) setLoading(true);
+  if(tasks.length > 0) {
+    for (let i = 0; i < tasks.length; i++) {
+      const {id} = tasks[i];
+      if(id) BE_deleteTask(dispatch, id, listId);
+    }
+  }
+  const taskListRef = doc(db, taskListColl, listId);
+  await deleteDoc(taskListRef);
+  const deletedTaskList = await getDoc(taskListRef);
+  if(!deletedTaskList.exists()) {
+    if(setLoading) setLoading(false);
+    dispatch(deleteTaskList(listId));
+  }
+};
+
+
+// -------------------------------- FOR TASK -------------------------------
+export const BE_deleteTask = async (dispatch: AppDispatch, taskId: string, listId: string, setLoading?: setLoadingType) => {
+  if(setLoading) setLoading(true);
+  const taskRef = doc(db, taskListColl, listId, tasksColl, taskId);
+  await deleteDoc(taskRef);
+  const deletedTask = await getDoc(taskRef);
+  if (!deletedTask.exists()) {
+    if (setLoading) setLoading(false);
+    dispatch(deleteTask({ listId, taskId }));
+  }
+};
+
+export const BE_addTask = async (dispatch: AppDispatch, setLoading: setLoadingType, listId: string) => {
+  setLoading(true);
+  const taskRef = collection(db, taskListColl, listId, tasksColl);
+  const newTask = await addDoc(taskRef, {
+    ...defaultTask,
+    userId: getStorageUser().id,
+  });
+  const newTaskSnap = await getDoc(doc(db, taskListColl, listId, tasksColl, newTask.id));
+  if (newTaskSnap.exists()) {
+    const {title, description} = newTaskSnap.data();
+    const newlyAddedTask: taskType = {
+      id: newTaskSnap.id,
+      title: title,      
+      description: description,      
+    };
+    dispatch(addTask({ listId, task: newlyAddedTask }));
+    setLoading(false);
+  } else {
+    toastError("BE_addTask: doc not found", setLoading);
+  }
+  setLoading(false);
+};
+

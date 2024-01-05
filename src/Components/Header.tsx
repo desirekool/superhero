@@ -6,16 +6,18 @@ import {FiList} from 'react-icons/fi';
 import UserHeaderProfile from './UserHeaderProfile';
 import { useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../Redux/store';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { BE_signOut, getStorageUser} from '../Backend/Queries'
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Spinner from './Spinner';
+import { setUser } from '../Redux/userSlice';
 
 export default function Header() {
   const [logoutLoading, setLogoutLoading] = useState(false);
   const goTo = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
+
   const handleSignOut = async () => {
     BE_signOut(dispatch, goTo, setLogoutLoading);
   };
@@ -23,6 +25,24 @@ export default function Header() {
   const currentUser = useSelector((state: RootState) => state.user.currentUser);
 
   const usr = getStorageUser();
+
+  useEffect(() => {
+    if (usr?.id) {
+      dispatch(setUser(usr));
+    } else {
+      goTo("/auth");
+    }
+  }, [dispatch, goTo]);
+
+  useEffect(() => {
+    const page = getCurrentPage();
+    if (page) goTo("/dashboard/" + page);
+
+    // const get = async () => {
+    //   if (usr?.id) await BE_getChats(dispatch);
+    // };
+    // get();
+  }, [goTo]);
 
   const handleGoToPage = (page: string) => {
     goTo("/dashboard/" + page);
