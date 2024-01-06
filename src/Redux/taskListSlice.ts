@@ -115,9 +115,74 @@ const taskListSlice = createSlice({
 
       state.currentTaskList = updatedTaskList;
     },
+    collapseTask: (state, action) => {
+      const { listId, taskId } = action.payload;
+
+      const updatedTaskList = state.currentTaskList.map((tL) => {
+        if (tL.id === listId) {
+          tL.tasks = tL.tasks?.map((t) => {
+            if (t.id === taskId) {
+              t.collapsed = !t.collapsed;
+            }
+            return t;
+          });
+        }
+        return tL;
+      });
+
+      state.currentTaskList = updatedTaskList;
+    },
+    taskSwitchEditMode: (state, action) => {
+      const { listId, taskId, value } = action.payload;
+
+      const updatedTaskList = state.currentTaskList.map((tL) => {
+        if (tL.id === listId) {
+          tL.tasks = tL.tasks?.map((t) => {
+            if (t.id === taskId) {
+              t.editMode = value !== undefined ? value : true;
+            }
+            return t;
+          });
+        }
+        return tL;
+      });
+
+      state.currentTaskList = updatedTaskList;
+    },
+    saveTask: (state, action) => {
+      const { listId, taskId, title, description } = action.payload;
+
+      const updatedTaskList = state.currentTaskList.map((tL) => {
+        if (tL.id === listId) {
+          tL.tasks = tL.tasks?.map((t) => {
+            if (t.id === taskId) {
+              t.title = title;
+              t.description = description;
+              t.editMode = false;
+            }
+            return t;
+          });
+        }
+        return tL;
+      });
+
+      state.currentTaskList = updatedTaskList;
+    },
+    setTaskListTasks: (state, action) => {
+      const { listId, tasks } = action.payload;
+
+      const updatedTaskList = state.currentTaskList.map((tL) => {
+        if (tL.id === listId) {
+          tL.tasks = tasks;
+        }
+        return tL;
+      });
+
+      state.currentTaskList = updatedTaskList;
+    },
   },
 });
 
-export const { setTaskList, addTaskList, deleteTaskList, saveTaskListTitle, taskListSwitchEditMode, deleteTask, addTask, collapseAllTask } = taskListSlice.actions;
+export const { setTaskList, addTaskList, deleteTaskList, saveTaskListTitle, taskListSwitchEditMode, deleteTask, addTask, saveTask, collapseTask, collapseAllTask, taskSwitchEditMode, setTaskListTasks } = taskListSlice.actions;
 
 export default taskListSlice.reducer;

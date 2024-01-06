@@ -1,12 +1,13 @@
-import React, { forwardRef, useState } from 'react';
+import React, { forwardRef, useEffect, useState } from 'react';
 import Icon from './Icon';
 import { MdAdd, MdEdit, MdDelete, MdKeyboardArrowDown, MdSave } from 'react-icons/md';
 import Tasks from './Tasks';
 import { taskListType } from '../Types';
 import { useDispatch } from 'react-redux';
 import { AppDispatch } from '../Redux/store';
-import { BE_addTask, BE_deleteTaskList, BE_saveTaskList } from '../Backend/Queries';
+import { BE_addTask, BE_deleteTaskList, BE_saveTaskList, getTasksForTaskList } from '../Backend/Queries';
 import { taskListSwitchEditMode, collapseAllTask } from '../Redux/taskListSlice';
+import { TaskListTasksLoader } from './Loaders';
 
 type SingleTaskListTypes = {
   singleTaskList: taskListType;  
@@ -26,6 +27,24 @@ const SingleTaskList = forwardRef(
   const [taskLoading, setTaskLoading] = useState(false);
   
   const dispatch = useDispatch<AppDispatch>();
+
+      useEffect(() => {
+        // get tasks here
+        if (id) getTasksForTaskList(dispatch, id, setTaskLoading);
+      }, [dispatch, id]);
+
+      useEffect(() => {
+        const checkAllCollapsed = () => {
+          if(tasks && tasks.length) {
+            for (let i = 0; i < tasks.length; i++) {
+              const task = tasks[i];
+              if (!task.collapsed) return setAllCollapsed(false);
+            }
+          }
+          return setAllCollapsed(true);
+        };
+        checkAllCollapsed();
+      }, [tasks]);
 
   const handleSaveTaskListTitle = () => {
     if(id) BE_saveTaskList(dispatch, setSaveLoading, id, homeTitle);    
@@ -82,11 +101,11 @@ const SingleTaskList = forwardRef(
             <Icon 
               IconName={MdKeyboardArrowDown} 
               onClick={handleCollapseClick}
-              className={`${allCollapsed ? 'rotate-180' : 'rotate-0'}`}
+              className={`${allCollapsed ? 'rotate-180' : 'rotate-0'} transition-all`}
             />
           </div>
         </div>
-        {id && <Tasks tasks={tasks || []} listId={id}/>}
+        {taskLoading ? (<TaskListTasksLoader />) : (id && <Tasks tasks={tasks || []} listId={id} />)}
       </div>
       <Icon
         IconName={MdAdd}

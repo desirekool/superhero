@@ -1,4 +1,4 @@
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { createUserWithEmailAndPassword, deleteUser, signInWithEmailAndPassword, signOut, updateEmail, updatePassword } from "firebase/auth";
 import { auth, db } from "./Firebase";
 import { authDataType, setLoadingType, taskListType, taskType, userType } from "../Types";
 import {
@@ -21,13 +21,13 @@ import {
 
 import { NavigateFunction } from "react-router-dom";
 import { AppDispatch } from "../Redux/store";
-import { addTaskList, defaultTask, defaultTaskList, setTaskList, saveTaskListTitle, deleteTaskList, deleteTask, addTask } from "../Redux/taskListSlice";
+import { addTaskList, defaultTask, defaultTaskList, setTaskList, saveTaskListTitle, deleteTaskList, deleteTask, addTask, saveTask, setTaskListTasks } from "../Redux/taskListSlice";
 import { defaultUser, setUser, userStorageName } from "../Redux/userSlice";
-import { toastError } from "../utils/toast";
+import { toastError, toastSuccess } from "../utils/toast";
 import CatchErr from "../utils/catchErr";
 import ConvertTime from "../utils/ConvertTime";
 import AvatarGenerator from "../utils/AvatarGenerator";
-import { LoremIpsum } from "lorem-ipsum";
+
 
 // collection names
 const usersColl = "users";
@@ -35,17 +35,6 @@ const tasksColl = "tasks";
 const taskListColl = "taskList";
 const chatsColl = "chats";
 const messagesColl = "messages";
-
-const lorem = new LoremIpsum({
-  sentencesPerParagraph: {
-    max: 8,
-    min: 4
-  },
-  wordsPerSentence: {
-    max: 16,
-    min: 4
-  }
-});
 
 export const BE_signUp = (
   data: authDataType, 
@@ -168,7 +157,7 @@ const updateUserInfo = async ({
       ...(username && { username }),
       ...(isOnline && { isOnline }),
       ...(isOffline && { isOnline: false }),
-      ...(img && { img }), // img:"someimage"
+      ...(img && { img }),
       lastSeen: serverTimestamp(),
     });
   }
@@ -200,6 +189,73 @@ export const BE_signOut = (
     })
     .catch((err) => CatchErr(err));
 };
+
+export const BE_saveProfile = async (dispatch: AppDispatch, setLoading: setLoadingType, data: {
+  email: string,
+  username: string,
+  password: string,
+  img: string,
+}) => {
+  setLoading(true);
+  const { email, username, password, img } = data;
+  const id = getStorageUser().id;
+  if (id && auth.currentUser) {
+    if(email) {
+      updateEmail(auth.currentUser, email)
+      .then(() => {
+        toastSuccess("Email updated successfully");
+      })
+      .catch((err) => CatchErr(err));
+    }
+
+    if(password) {
+      updatePassword(auth.currentUser, password)
+      .then(() => {
+        toastSuccess("Password updated successfully");
+      })
+      .catch((err) => CatchErr(err));
+    }
+
+    if(username || img) {
+      updateUserInfo({username, img});
+      toastSuccess("Profile updated successfully");
+    }
+
+    const userInfo = await getUserInfo(id);
+    dispatch(setUser(userInfo));
+    setLoading(false);
+
+  } else {
+    toastError("BE_saveProfile: id not found", setLoading);
+  }
+};
+
+export const BE_deleteAccount = async (dispatch: AppDispatch, setLoading: setLoadingType, goTo: NavigateFunction, ) => {
+  setLoading(true);
+  const id = getStorageUser().id;
+  if(id) {
+    const userTaskList = await getAllTasksList();
+
+    if(userTaskList.length > 0) { 
+      userTaskList.forEach(async (list: taskListType) => {        
+        if(list.id && list.tasks) await BE_deleteTaskList(dispatch, list.id, list.tasks);
+      });
+    }
+
+    await deleteDoc(doc(db, usersColl, id));
+    const user = auth.currentUser;
+    console.log("USER To BE DELETED: ", user);
+    if(user) {
+      deleteUser(user)
+      .then(async () => {
+        BE_signOut(dispatch, goTo, setLoading, true);
+      })
+      .catch((err) => CatchErr(err));      
+    }
+  } else {
+    toastError("BE_deleteAccount: id not found", setLoading);
+  }
+}
 
 // TaskList Querries
 export const BE_addTaskList = async (dispatch:AppDispatch, setLoading: setLoadingType) => {
@@ -314,3 +370,38 @@ export const BE_addTask = async (dispatch: AppDispatch, setLoading: setLoadingTy
   setLoading(false);
 };
 
+export const BE_saveTask = async (dispatch: AppDispatch, setLoading: setLoadingType, listId: string, data: taskType) => {
+  setLoading(true);
+  const { id, title, description } = data;
+  if(id) {
+    const taskRef = doc(db, taskListColl, listId, tasksColl, id);
+    await updateDoc(taskRef, {
+      title,
+      description,
+    });
+    const updatedTask = await getDoc(taskRef);
+    if(updatedTask.exists()) {
+      setLoading(false);
+      dispatch(saveTask({listId, task: {...updatedTask.data(), id: updatedTask.id}}));
+    } else toastError("BE_saveTask: updated task not found", setLoading);
+  } else toastError("BE_saveTask: id not found", setLoading);
+}
+
+export const getTasksForTaskList = async (dispatch:AppDispatch, listId: string, setLoading: setLoadingType) => {
+  setLoading(true);
+  const taskRef = collection(db, taskListColl, listId, tasksColl);
+  const querySnapshot = await getDocs(taskRef);
+  const tasks:taskType[] = [];
+  querySnapshot.forEach((task) => {
+    const { title, description } = task.data();
+    tasks.push({
+      id: task.id,
+      title,
+      description,
+      editMode: false,
+      collapsed: true
+    });
+  });
+  dispatch(setTaskListTasks({listId, tasks}));
+  setLoading(false);
+}

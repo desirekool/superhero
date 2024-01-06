@@ -19,3 +19,10 @@ export const SingleListLoader = () => {
   )
 };
 
+export const TaskListTasksLoader = () => {
+  return (
+    <div className='animate-pulse flex-1 space-y-3 p-4 pb-10'>
+      {[1,2,3].map((item) => <div className="h-2 bg-gray-300 rounded" key={item} ></div>)}
+    </div>
+  )
+}
