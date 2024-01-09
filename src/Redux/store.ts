@@ -1,11 +1,13 @@
 import { configureStore } from '@reduxjs/toolkit';
 import userSlice from './userSlice';
 import taskListSlice from './taskListSlice';
+import chatSlice from './chatSlice';
 
 const store = configureStore({
   reducer: {
     user: userSlice,
-    taskList: taskListSlice,        
+    taskList: taskListSlice,
+    chat: chatSlice,        
   },
 });
 

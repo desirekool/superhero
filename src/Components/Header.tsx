@@ -8,7 +8,7 @@ import { useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../Redux/store';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
-import { BE_signOut, getStorageUser} from '../Backend/Queries'
+import { BE_getChats, BE_signOut, getStorageUser} from '../Backend/Queries'
 import { useState, useEffect } from 'react';
 import Spinner from './Spinner';
 import { setUser } from '../Redux/userSlice';
@@ -38,10 +38,10 @@ export default function Header() {
     const page = getCurrentPage();
     if (page) goTo("/dashboard/" + page);
 
-    // const get = async () => {
-    //   if (usr?.id) await BE_getChats(dispatch);
-    // };
-    // get();
+    const get = async () => {
+      if (usr?.id) await BE_getChats(dispatch);
+    };
+    get();
   }, [goTo]);
 
   const handleGoToPage = (page: string) => {

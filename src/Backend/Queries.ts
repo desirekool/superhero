@@ -1,6 +1,6 @@
 import { createUserWithEmailAndPassword, deleteUser, signInWithEmailAndPassword, signOut, updateEmail, updatePassword } from "firebase/auth";
 import { auth, db } from "./Firebase";
-import { authDataType, setLoadingType, taskListType, taskType, userType } from "../Types";
+import { authDataType, chatType, messageType, setLoadingType, taskListType, taskType, userType } from "../Types";
 import {
   addDoc,
   and,
@@ -22,11 +22,13 @@ import {
 import { NavigateFunction } from "react-router-dom";
 import { AppDispatch } from "../Redux/store";
 import { addTaskList, defaultTask, defaultTaskList, setTaskList, saveTaskListTitle, deleteTaskList, deleteTask, addTask, saveTask, setTaskListTasks } from "../Redux/taskListSlice";
-import { defaultUser, setUser, userStorageName } from "../Redux/userSlice";
+import { defaultUser, setAlertProps, setUser, setUsers, userStorageName } from "../Redux/userSlice";
 import { toastError, toastSuccess } from "../utils/toast";
 import CatchErr from "../utils/catchErr";
 import ConvertTime from "../utils/ConvertTime";
 import AvatarGenerator from "../utils/AvatarGenerator";
+import { setChats, setCurrentMessages } from "../Redux/chatSlice";
+import { set } from "firebase/database";
 
 
 // collection names
@@ -81,14 +83,12 @@ export const BE_signIn = (data: authDataType, setLoading: setLoadingType, reset:
       await updateUserInfo({id: user.uid, isOnline: true});      
       const userInfo = await getUserInfo(user.uid);
       dispatch(setUser(userInfo));
-
-      // console.log(user);
+      
       setLoading(false);
       reset();
       goTo('/dashboard');
     })
-    .catch(error => {
-      // console.log(error);
+    .catch(error => {  
       CatchErr(error.code);
       setLoading(false);
     });
@@ -112,12 +112,13 @@ const addUserToCollection = async (id:string, email:string, username:string, img
   return getUserInfo(id);
 };
 
-const getUserInfo = async (id:string): Promise< userType> => {
-  
+export const getUserInfo = async (id:string, setLoading?: setLoadingType): Promise< userType> => {
+  if(setLoading) setLoading(true);
   const userRef = doc(db, usersColl, id);
   const userSnap = await getDoc(userRef);
   if(userSnap.exists()) {
     const {img, isOnline, username, email, creationTime, lastSeen, bio} = userSnap.data();
+    if(setLoading) setLoading(false);
     return {
       id: userSnap.id,
       username,
@@ -129,6 +130,7 @@ const getUserInfo = async (id:string): Promise< userType> => {
       bio,
     };
   } else {
+    if(setLoading) setLoading(false);
     toastError('getUserInfo: User not found');
     return defaultUser;
   }
@@ -257,7 +259,38 @@ export const BE_deleteAccount = async (dispatch: AppDispatch, setLoading: setLoa
   }
 }
 
-// TaskList Querries
+export const BE_getAllUsers = async (dispatch: AppDispatch, setLoading: setLoadingType) => {
+  setLoading(true);
+  const usersRef = collection(db, usersColl);
+  const q = query(usersRef, orderBy("isOnline", "desc"));
+
+  onSnapshot(q, (snapshot) => {
+    const users: userType[] = [];
+    snapshot.forEach((doc) => {
+      users.push({
+        id: doc.id,
+        username: doc.data().username,
+        email: doc.data().email,
+        img: doc.data().img,
+        isOnline: doc.data().isOnline,
+        bio: doc.data().bio,
+        creationTime: doc.data().creationTime
+          ? ConvertTime(doc.data().creationTime.toDate())
+          : "no date yet: all users creation time",
+        lastSeen: doc.data().lastSeen
+          ? ConvertTime(doc.data().lastSeen.toDate())
+          : "no date yet: all users last seen",
+      });
+    });
+    const id = getStorageUser().id;
+    if (id) {
+      dispatch(setUsers(users.filter((u) => u.id !== id)));
+    }
+    setLoading(false);
+  });
+};
+
+// --------------------------For TaskList -------------------------------------
 export const BE_addTaskList = async (dispatch:AppDispatch, setLoading: setLoadingType) => {
   setLoading(true);
   const { title } = defaultTaskList;
@@ -279,8 +312,7 @@ export const BE_addTaskList = async (dispatch:AppDispatch, setLoading: setLoadin
     toastError('BE_addTaskList: doc not found', setLoading);
   }
 
-  setLoading(false);
-  console.log(list.path);
+  setLoading(false);  
 };
 
 export const BE_getTaskLists = async (dispatch:AppDispatch, setLoading: setLoadingType) => {
@@ -405,3 +437,129 @@ export const getTasksForTaskList = async (dispatch:AppDispatch, listId: string, 
   dispatch(setTaskListTasks({listId, tasks}));
   setLoading(false);
 }
+
+//----------------------------- For Chat -----------------------------------
+
+export const BE_startChat = async (dispatch: AppDispatch, setLoading: setLoadingType, rId: string, rName: string) => {
+  setLoading(true);
+  const sId = getStorageUser().id;
+  const chatRef = collection(db, chatsColl);
+  const q = query(chatRef, or(
+            and(where("senderId", "==", sId), where("receiverId", "==", rId)),
+            and(where("senderId", "==", rId), where("receiverId", "==", sId)))
+  );
+  const querySnapshot = await getDocs(q);
+
+  if(querySnapshot.empty) {
+    const newChat = await addDoc(chatRef, {
+      senderId: sId,
+      receiverId: rId,
+      lastMsg: "",
+      senderToRecieverMsgCount: 0,
+      recieverToSenderMsgCount: 0,
+      updatedAt: serverTimestamp(),
+    });
+    const newChatSnap = await getDoc(doc(db, chatsColl, newChat.id));
+    if(!newChatSnap.exists()) {
+      toastError("BE_startChat: new chat not found");
+    } 
+    setLoading(false);
+    dispatch(setAlertProps({open: false}));
+  } else {
+    toastError("You already started chatting with " + rName, setLoading);    
+    dispatch(setAlertProps({ open: false }));
+  }  
+}
+
+export const BE_getChats = async (dispatch: AppDispatch) => {
+  
+  const sId = getStorageUser().id;
+  const chatRef = collection(db, chatsColl);
+  const q = query(chatRef, or(
+            where("senderId", "==", sId), where("receiverId", "==", sId))
+  );
+  onSnapshot(q, (snapshot) => {
+    const chats: chatType[] = [];  
+    snapshot.forEach((chat) => {
+      const { senderId, receiverId, lastMsg, senderToRecieverMsgCount, recieverToSenderMsgCount, updatedAt } = chat.data();
+      chats.push({
+        id: chat.id,
+        senderId,
+        receiverId,
+        lastMsg,
+        senderToRecieverMsgCount,
+        recieverToSenderMsgCount,
+        updatedAt: updatedAt ? ConvertTime(updatedAt.toDate().toString()) : "no date yet: chat updatedAt",
+      });
+    });
+    dispatch(setChats(chats));
+  });
+}
+export const BE_getMsgs = async (dispatch: AppDispatch, setLoading: setLoadingType, chatId: string) => {
+  setLoading(true);
+  const msgRef = collection(db, chatsColl, chatId, messagesColl);
+  const q = query(msgRef, orderBy("createdAt", "asc"));
+  onSnapshot(q, (snapshot) => {
+    const msgs: messageType[] = [];
+    snapshot.forEach((msg) => {
+      const { senderId, content, createdAt } = msg.data();
+      msgs.push({
+        id: msg.id,
+        senderId,        
+        content,
+        createdAt: createdAt ? ConvertTime(createdAt.toDate().toString()) : "no date yet: All messages",
+      });
+    });
+    setLoading(false);
+    dispatch(setCurrentMessages(msgs));    
+  });  
+}
+export const iCreatedChat = (sId: string) => {  
+  return sId === getStorageUser().id;
+}
+
+export const BE_sendMsgs = async (chatId:string, data: messageType, setLoading: setLoadingType) => {
+  setLoading(true);  
+  const msgRef = collection(db, chatsColl, chatId, messagesColl);
+  const res = await addDoc(msgRef, {
+    ...data,
+    createdAt: serverTimestamp(),
+  });
+  const newMsgSnap = await getDoc(doc(db, res.path));
+  if(newMsgSnap.exists()) {
+    await updateNewMsgCount(chatId, true);
+    await updateLastMsg(chatId, newMsgSnap.data().content);
+    await updateUserInfo({});
+    setLoading(false);
+  }   
+}
+
+export const updateNewMsgCount = async(chatId:string, reset?:boolean) => {
+  const chatRef = doc(db, chatsColl, chatId);
+  const chatSnap = await getDoc(chatRef);
+  let senderToRecieverMsgCount = chatSnap.data()?.senderToRecieverMsgCount;
+  let recieverToSenderMsgCount = chatSnap.data()?.recieverToSenderMsgCount;
+  if (iCreatedChat(chatSnap.data()?.senderId)) {
+    if(reset) recieverToSenderMsgCount = 0;
+    else senderToRecieverMsgCount++;
+  } else {
+    if(reset) senderToRecieverMsgCount = 0;
+    else recieverToSenderMsgCount++;
+  }
+
+  await updateDoc(chatRef, {
+    updatedAt: serverTimestamp(),
+    senderToRecieverMsgCount,
+    recieverToSenderMsgCount,
+  });  
+}
+
+const updateLastMsg = async (chatId: string, lastMsg: string) => {
+  await updateNewMsgCount(chatId);
+  // await message count here
+  await updateDoc(doc(db, chatsColl, chatId), {
+    lastMsg,
+    updatedAt: serverTimestamp(),
+  });
+};
+  

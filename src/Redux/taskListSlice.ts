@@ -59,8 +59,6 @@ const taskListSlice = createSlice({
       const taskList = state.currentTaskList.find((tL) => tL.id === listId);
       const listIdx = state.currentTaskList.findIndex((tL) => tL.id === listId);
 
-      console.log(action);
-
       taskList?.tasks?.map((t) => {
         t.collapsed = value !== undefined ? value : true;
         t.editMode = false;
