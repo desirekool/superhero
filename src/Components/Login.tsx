@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Button from "./Button";
 import Input from "./Input";
-import { auth } from "../Backend/Firebase";
+// import { auth } from "../Backend/Firebase";
 import { BE_signUp, BE_signIn } from "../Backend/Queries";
 import { useNavigate } from "react-router-dom";
 import { AppDispatch } from "../Redux/store";

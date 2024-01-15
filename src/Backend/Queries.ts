@@ -28,7 +28,7 @@ import CatchErr from "../utils/catchErr";
 import ConvertTime from "../utils/ConvertTime";
 import AvatarGenerator from "../utils/AvatarGenerator";
 import { setChats, setCurrentMessages } from "../Redux/chatSlice";
-import { set } from "firebase/database";
+// import { set } from "firebase/database";
 
 
 // collection names

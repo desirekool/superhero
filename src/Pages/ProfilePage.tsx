@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import AvatarGenerator from "../utils/AvatarGenerator";
 import { AppDispatch, RootState } from "../Redux/store";
 import { toastError, toastWarning } from "../utils/toast";
-import { BE_saveProfile } from "../Backend/Queries";
+import { BE_deleteAccount, BE_saveProfile } from "../Backend/Queries";
 
 const ProfilePage = () => {
   const [email, setEmail] = useState("");
