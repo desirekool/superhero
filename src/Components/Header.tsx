@@ -1,4 +1,4 @@
-import logo from './../Assets/logo.png';
+import logo from './../Assets/logo.jpg';
 import AddListBoard from './AddListBoard';
 import { BsFillChatFill } from "react-icons/bs";
 import Icon from './Icon';

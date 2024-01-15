@@ -21,7 +21,7 @@ const UserHeaderProfile = forwardRef(
       ref={ref}
       onClick={handleClick}
       className={`flex items-center space-x-4 cursor-pointer 
-                ${otherUser ? 'group px-py-3 hover:bg-gray-200 border-b-[1px] border-gray-200' : ''} 
+                ${otherUser ? 'group px3 py-3 hover:bg-gray-200 border-b-[1px] border-gray-200' : ''} 
                 ${isSelected ? 'bg-gray-200' : ''}
                 `}
     >
